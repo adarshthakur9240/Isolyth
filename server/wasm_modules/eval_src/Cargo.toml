@@ -1,0 +1,11 @@
+[package]
+name = "eval"
+version = "0.1.0"
+edition = "2021"
+
+# No external dependencies — the parser is hand-rolled so the binary stays tiny
+# and auditable.  The whole evaluator compiles to ~50 KB of WASM.
+
+[[bin]]
+name = "eval"
+path = "src/main.rs"

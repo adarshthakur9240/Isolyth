@@ -1,0 +1,12 @@
+[package]
+name = "factorial"
+version = "0.1.0"
+edition = "2021"
+
+# No external dependencies — only the Rust standard library.
+# The wasm32-wasip1 target ships with a WASI-compatible std, so
+# std::io::{stdin, stdout} work exactly like they do on native.
+
+[[bin]]
+name = "factorial"
+path = "src/main.rs"

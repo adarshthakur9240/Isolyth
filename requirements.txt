@@ -1,0 +1,15 @@
+mcp
+fastapi
+uvicorn[standard]
+asyncpg
+python-jose[cryptography]
+redis
+wasmtime
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-instrumentation-fastapi
+prometheus-client
+httpx
+pytest
+pytest-asyncio
+locust
