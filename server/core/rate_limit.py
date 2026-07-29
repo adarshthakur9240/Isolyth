@@ -115,6 +115,15 @@ class RateLimiter:
           - reset_seconds: time until full reset
           - tool_name: target tool
         """
+        if os.environ.get("RATE_LIMIT_DISABLED", "").lower() in ("true", "1", "yes") or \
+           os.environ.get("RATE_LIMIT_MODE", "").lower() == "disabled":
+            return True, {
+                "limit": 999999,
+                "remaining": 999999,
+                "reset_seconds": 60,
+                "tool_name": tool_name,
+            }
+
         max_requests, window_seconds = self.get_limit_config(tool_name)
         key = f"rate_limit:{user_id}:{tool_name}"
 

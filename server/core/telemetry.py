@@ -36,25 +36,38 @@ logger = logging.getLogger("isolyth.telemetry")
 
 # ── OpenTelemetry Tracing Setup ───────────────────────────────────────────────
 
+import os
+
 _tracer_provider: TracerProvider | None = None
 _tracer: trace.Tracer | None = None
 
 
 def setup_telemetry() -> trace.Tracer:
-    """Initialize OpenTelemetry tracer provider with ConsoleSpanExporter."""
+    """Initialize OpenTelemetry tracer provider."""
     global _tracer_provider, _tracer
 
     if _tracer is not None:
         return _tracer
 
     provider = TracerProvider()
-    processor = SimpleSpanProcessor(ConsoleSpanExporter())
-    provider.add_span_processor(processor)
+
+    # Console span exporter is disabled by default to avoid console clutter.
+    # Enable by setting OTEL_CONSOLE_EXPORTER=true or DEBUG=true.
+    enable_console_exporter = os.environ.get("OTEL_CONSOLE_EXPORTER", "").lower() in ("true", "1", "yes") or \
+                             os.environ.get("DEBUG", "").lower() in ("true", "1", "yes") or \
+                             os.environ.get("ISOLYTH_DEBUG", "").lower() in ("true", "1", "yes")
+
+    if enable_console_exporter:
+        processor = SimpleSpanProcessor(ConsoleSpanExporter())
+        provider.add_span_processor(processor)
+        logger.info("OpenTelemetry tracing initialized with ConsoleSpanExporter")
+    else:
+        logger.info("OpenTelemetry tracing initialized (ConsoleSpanExporter disabled)")
+
     trace.set_tracer_provider(provider)
 
     _tracer_provider = provider
     _tracer = trace.get_tracer("isolyth", "0.1.0")
-    logger.info("OpenTelemetry tracing initialized with ConsoleSpanExporter")
     return _tracer
 
 

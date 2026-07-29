@@ -1,71 +1,191 @@
-version: "3.9"
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  Isolyth – docker-compose.yml                                               ║
+# ║  Spins up: isolyth (MCP/FastAPI), PostgreSQL 16, Redis 7                    ║
+# ║  Optional profile "observability" adds Prometheus + Grafana                 ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+# 'version' is deprecated in Compose v2 but kept for older Docker versions.
+name: isolyth
 
 services:
-  # ── Isolyth server ──────────────────────────────────────────────
+
+  # ── Isolyth – MCP / FastAPI server ────────────────────────────────────────
   isolyth:
     build:
       context: .
       dockerfile: Dockerfile
+      # Cache-busting: only rebuild when requirements change or source changes
+      cache_from:
+        - type=local,src=/tmp/.buildx-cache
     image: isolyth:latest
     container_name: isolyth
     restart: unless-stopped
-    stdin_open: true   # keep stdin open for MCP stdio transport
-    tty: false
+    ports:
+      - "${PORT:-8000}:8000"
     environment:
-      - LOG_LEVEL=INFO
-      - REDIS_URL=redis://redis:6379/0
-      - DB_URL=postgresql://sentinel:sentinel@postgres:5432/sentineldb
+      # Core
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      PORT: "8000"
+      # Database (asyncpg DSN)
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-isolyth_user}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-isolyth_db}"
+      DB_QUERY_TIMEOUT_S: "${DB_QUERY_TIMEOUT_S:-10}"
+      DB_MAX_ROWS: "${DB_MAX_ROWS:-500}"
+      # Redis
+      REDIS_URL: "redis://redis:6379/0"
+      # File sandbox (maps to the named volume below)
+      FILE_OPS_SANDBOX_ROOT: "/workspace"
+      FILE_OPS_MAX_READ_BYTES: "${FILE_OPS_MAX_READ_BYTES:-1048576}"
+      # Auth
+      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET env var is required}"
+      JWT_ALGORITHM: "${JWT_ALGORITHM:-HS256}"
+      JWT_EXPIRE_MINUTES: "${JWT_EXPIRE_MINUTES:-60}"
+      # Web fetch
+      WEB_FETCH_TIMEOUT_S: "${WEB_FETCH_TIMEOUT_S:-5}"
+      WEB_FETCH_MAX_BYTES: "${WEB_FETCH_MAX_BYTES:-2097152}"
+      # Code execution (WASM)
+      CODE_EXEC_MAX_FUEL: "${CODE_EXEC_MAX_FUEL:-10000000}"
+      CODE_EXEC_TIMEOUT_S: "${CODE_EXEC_TIMEOUT_S:-3}"
     volumes:
-      - sentinel_workspace:/workspace
+      - isolyth_workspace:/workspace
     depends_on:
-      redis:
-        condition: service_healthy
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - >
+          import urllib.request, sys;
+          r = urllib.request.urlopen('http://localhost:8000/health', timeout=4);
+          sys.exit(0 if r.status == 200 else 1)
+      interval: 15s
+      timeout: 5s
+      start_period: 25s
+      retries: 3
+    networks:
+      - isolyth_net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # ── Redis (rate-limit + session cache) ─────────────────────────────────────
+  # ── PostgreSQL 16 ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: isolyth_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-isolyth_user}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-changeme}"
+      POSTGRES_DB: "${POSTGRES_DB:-isolyth_db}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Drop any *.sql init scripts into infra/initdb/ to pre-seed the DB.
+      - ./infra/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "pg_isready -U ${POSTGRES_USER:-isolyth_user} -d ${POSTGRES_DB:-isolyth_db}"
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+    networks:
+      - isolyth_net
+    # Don't expose the port to the host by default – only services on
+    # isolyth_net can reach it.  Uncomment to access from host tooling.
+    # ports:
+    #   - "5432:5432"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Redis 7 ────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
-    container_name: sentinel_redis
+    container_name: isolyth_redis
     restart: unless-stopped
+    # Enable persistence (AOF) so rate-limit counters survive a restart.
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
+      start_period: 10s
       retries: 5
-    volumes:
-      - redis_data:/data
+    networks:
+      - isolyth_net
+    # Uncomment to access Redis from host tooling.
+    # ports:
+    #   - "6379:6379"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
 
-  # ── PostgreSQL (db_query tool backend) ─────────────────────────────────────
-  postgres:
-    image: postgres:16-alpine
-    container_name: sentinel_postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: sentinel
-      POSTGRES_PASSWORD: sentinel
-      POSTGRES_DB: sentineldb
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sentinel -d sentineldb"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  # ── Prometheus (metrics scraping) ──────────────────────────────────────────
+  # ── Prometheus (optional – activate with --profile observability) ──────────
   prometheus:
-    image: prom/prometheus:latest
-    container_name: sentinel_prometheus
+    image: prom/prometheus:v2.51.2
+    container_name: isolyth_prometheus
     restart: unless-stopped
     ports:
       - "9090:9090"
     volumes:
       - ./infra/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--storage.tsdb.retention.time=15d"
+    depends_on:
+      isolyth:
+        condition: service_healthy
+    networks:
+      - isolyth_net
     profiles:
       - observability
 
+  # ── Grafana (optional – activate with --profile observability) ────────────
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: isolyth_grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_PASSWORD:-admin}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    networks:
+      - isolyth_net
+    profiles:
+      - observability
+
+# ── Named volumes ─────────────────────────────────────────────────────────────
 volumes:
-  sentinel_workspace:
-  redis_data:
+  isolyth_workspace:
   postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  isolyth_net:
+    driver: bridge

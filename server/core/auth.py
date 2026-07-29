@@ -26,7 +26,8 @@ logger = logging.getLogger("isolyth.auth")
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 JWT_SECRET_KEY: str = os.environ.get(
-    "JWT_SECRET_KEY", "isolyth-dev-secret-key-change-in-production"
+    "JWT_SECRET_KEY",
+    os.environ.get("JWT_SECRET", "isolyth-dev-secret-key-change-in-production"),
 )
 JWT_ALGORITHM: str = os.environ.get("JWT_ALGORITHM", "HS256")
 REQUIRE_AUTH: bool = os.environ.get("REQUIRE_AUTH", "true").lower() in (

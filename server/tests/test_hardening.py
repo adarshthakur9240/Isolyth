@@ -202,3 +202,37 @@ class TestServerHardeningPipeline:
         assert data["error"] == "RateLimitExceeded"
         assert "rate_limit_info" in data
         assert data["rate_limit_info"]["limit"] == 2
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 5. HTTP Server Dev Token Endpoint Tests
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestHttpServerDevTokenEndpoint:
+    def test_dev_token_endpoint_returns_valid_jwt(self) -> None:
+        from fastapi.testclient import TestClient
+        from server.http_server import app
+
+        client = TestClient(app)
+        response = client.get("/auth/dev-token")
+        assert response.status_code == 200
+        data = response.json()
+        assert "token" in data
+        assert data["type"] == "Bearer"
+
+        # Verify the returned token is a valid JWT
+        claims = verify_token(data["token"])
+        assert claims["sub"] == "dev-user"
+
+    def test_dev_token_endpoint_disabled_when_dev_mode_false(self) -> None:
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from server.http_server import app
+
+        client = TestClient(app)
+        with patch("server.http_server.DEV_MODE", False):
+            response = client.get("/auth/dev-token")
+            assert response.status_code == 403
+            assert "disabled" in response.json()["detail"].lower()
+

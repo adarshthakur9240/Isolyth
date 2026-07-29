@@ -127,8 +127,14 @@ async def file_ops_handler(
     if not path_arg:
         return _error("path parameter is required")
 
-    # Ensure sandbox root exists.
-    root.mkdir(parents=True, exist_ok=True)
+    # Ensure sandbox root exists and has a sample file for operations.
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        sample_file = root / "sample.txt"
+        if not sample_file.exists():
+            sample_file.write_text("Isolyth MCP Tool Server Sandboxed Workspace\n")
+    except Exception:
+        pass
 
     # ── Path traversal check ──────────────────────────────────────────────────
     try:

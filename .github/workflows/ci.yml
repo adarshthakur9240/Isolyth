@@ -1,0 +1,212 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  Isolyth – GitHub Actions CI                                                ║
+# ║  Runs on every push and pull request.                                       ║
+# ║  Jobs: lint → test → docker-build                                           ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]      # all branches
+  pull_request:
+    branches: ["**"]
+
+# Cancel any in-progress run for the same branch to save minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Read-only token is sufficient for a pure CI workflow.
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+  # A dummy JWT secret so server code that reads it at import-time doesn't
+  # blow up during unit tests.  Real secret lives in GitHub Secrets.
+  JWT_SECRET: "ci-only-insecure-secret-do-not-use-in-production"
+
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+
+  # ── Job 1: Lint ─────────────────────────────────────────────────────────────
+  lint:
+    name: "Lint (ruff)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Run ruff check
+        # Treat any violation as a hard failure.
+        run: ruff check server/ --output-format=github
+
+      - name: Run ruff format check
+        run: ruff format server/ --check
+
+  # ── Job 2: Tests ─────────────────────────────────────────────────────────────
+  test:
+    name: "Pytest (all phases)"
+    runs-on: ubuntu-latest
+    needs: lint          # tests only run if linting passed
+
+    # Service containers for integration tests (db_query_tool, rate_limit, …).
+    # Unit tests skip them via the 'integration' pytest mark.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: isolyth_user
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: isolyth_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U isolyth_user -d isolyth_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Used by integration tests that actually hit the DB / Redis.
+      DATABASE_URL: "postgresql://isolyth_user:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/isolyth_db"
+      REDIS_URL: "redis://localhost:6379/0"
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      FILE_OPS_SANDBOX_ROOT: "/tmp/isolyth_workspace"
+      LOG_LEVEL: "WARNING"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Create sandbox workspace
+        run: mkdir -p /tmp/isolyth_workspace
+
+      - name: Run tests (unit)
+        # Always run unit tests; skip integration tests if services aren't
+        # configured (they are in this job, but the marker is still useful
+        # for local runs without Docker).
+        run: |
+          python -m pytest server/tests/ -v \
+            --tb=short \
+            -m "not integration" \
+            --junit-xml=reports/junit-unit.xml
+
+      - name: Run tests (integration)
+        # Integration tests need live Postgres and Redis – provided by service
+        # containers above.
+        run: |
+          python -m pytest server/tests/ -v \
+            --tb=short \
+            -m "integration" \
+            --junit-xml=reports/junit-integration.xml
+        continue-on-error: false   # fail the job if any integration test fails
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-reports
+          path: reports/
+          retention-days: 14
+
+  # ── Job 3: Docker build ──────────────────────────────────────────────────────
+  docker-build:
+    name: "Docker build (verify)"
+    runs-on: ubuntu-latest
+    needs: test          # only attempt the build if tests passed
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Authenticate to GHCR so we can push on main (optional).
+      # If you only want to verify the build, remove the login + push steps.
+      - name: Log in to GitHub Container Registry
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          # Push to GHCR only on pushes to main; otherwise just build locally.
+          push: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/isolyth:latest
+            ghcr.io/${{ github.repository_owner }}/isolyth:${{ github.sha }}
+          # Use GitHub Actions cache to speed up subsequent builds.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Build-time argument; image does NOT bake in secrets.
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
+
+      - name: Smoke-test the built image
+        # Run a quick health check against the freshly-built container.
+        # We inject a dummy JWT_SECRET so the server starts.
+        run: |
+          docker run --rm -d \
+            --name isolyth_smoke \
+            -p 8000:8000 \
+            -e JWT_SECRET="smoke-test-secret" \
+            -e DATABASE_URL="postgresql://u:p@localhost/db" \
+            -e REDIS_URL="redis://localhost:6379/0" \
+            -e LOG_LEVEL=WARNING \
+            ghcr.io/${{ github.repository_owner }}/isolyth:${{ github.sha }} \
+            || \
+          docker run --rm -d \
+            --name isolyth_smoke \
+            -p 8000:8000 \
+            -e JWT_SECRET="smoke-test-secret" \
+            -e DATABASE_URL="postgresql://u:p@localhost/db" \
+            -e REDIS_URL="redis://localhost:6379/0" \
+            -e LOG_LEVEL=WARNING \
+            isolyth:latest
+
+          # Give uvicorn ~15 s to start.
+          sleep 15
+
+          # curl must return HTTP 200 from /health.
+          curl --fail --silent --show-error http://localhost:8000/health
+
+          docker stop isolyth_smoke
