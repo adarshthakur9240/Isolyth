@@ -14,7 +14,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" style={{ height: "100%" }}>
+    <html lang="en" suppressHydrationWarning>
       <head>
         {/* Google Fonts — loaded client-side to avoid build-time network fetch */}
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}
@@ -25,7 +25,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body style={{ minHeight: "100%", display: "flex", flexDirection: "column" }}>
+      <body suppressHydrationWarning>
         {children}
       </body>
     </html>
