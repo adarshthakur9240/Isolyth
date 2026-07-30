@@ -79,10 +79,7 @@ def _safe_resolve(user_path: str, sandbox_root: Path) -> Path:
     # Interpret the user path as relative to sandbox root UNLESS it starts with
     # the sandbox root itself (support both relative and absolute inputs).
     raw = Path(user_path)
-    if raw.is_absolute():
-        candidate = raw
-    else:
-        candidate = sandbox_root / raw
+    candidate = raw if raw.is_absolute() else sandbox_root / raw
 
     resolved = candidate.resolve()
 
@@ -92,10 +89,10 @@ def _safe_resolve(user_path: str, sandbox_root: Path) -> Path:
     # against /tmp/isolyth_workspace/, but using resolved paths avoids even that.
     try:
         resolved.relative_to(resolved_root)
-    except ValueError:
+    except ValueError as err:
         raise PathTraversalError(
             f"Path traversal blocked: {user_path!r} resolves outside sandbox root"
-        )
+        ) from err
 
     return resolved
 

@@ -16,6 +16,8 @@ Usage:
   python server/bin/run_benchmark.py
 """
 
+import contextlib
+import csv
 import os
 from pathlib import Path
 import subprocess
@@ -95,9 +97,8 @@ def run_benchmark() -> None:
             print("❌ Could not find benchmark stats CSV output.")
             return
 
-        import csv
         rows = []
-        with open(stats_csv, "r", encoding="utf-8") as f:
+        with open(stats_csv, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 rows.append(row)
@@ -131,11 +132,11 @@ def run_benchmark() -> None:
                 rps_fmt, p50_fmt, p95_fmt, p99_fmt = rps, p50, p95, p99
 
             if "code_exec" in name:
-                try: wasm_p50 = float(p50)
-                except ValueError: pass
+                with contextlib.suppress(ValueError):
+                    wasm_p50 = float(p50)
             elif "file_ops" in name:
-                try: plain_p50 = float(p50)
-                except ValueError: pass
+                with contextlib.suppress(ValueError):
+                    plain_p50 = float(p50)
 
             disp_name = name[:34] if name != "Aggregated" else "TOTAL AGGREGATED"
             print(f"{disp_name:<35} | {rps_fmt:<8} | {p50_fmt:<9} | {p95_fmt:<9} | {p99_fmt:<9} | {fail_pct:<6}")
@@ -149,13 +150,15 @@ def run_benchmark() -> None:
 
         # Cleanup CSV artifacts
         for p in PROJECT_ROOT.glob("server/benchmark_stats_*"):
-            try: p.unlink()
-            except OSError: pass
+            with contextlib.suppress(OSError):
+                p.unlink()
 
     finally:
         server_proc.terminate()
-        try: server_proc.wait(timeout=2.0)
-        except Exception: server_proc.kill()
+        try:
+            server_proc.wait(timeout=2.0)
+        except Exception:
+            server_proc.kill()
 
 
 if __name__ == "__main__":

@@ -22,16 +22,18 @@ from pathlib import Path
 import sys
 from typing import Any
 
-# Ensure project root is on sys.path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from fastapi import FastAPI, Header, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
+from mcp.types import CallToolRequest, CallToolRequestParams
 from pydantic import BaseModel, Field
+import uvicorn
 
 from server.core.auth import generate_dev_token
-from server.core.mcp_server import build_server, _register_real_tools
+from server.core.mcp_server import _register_real_tools, build_server
 from server.core.telemetry import get_prometheus_metrics
+
+# Ensure project root is on sys.path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 logger = logging.getLogger("isolyth.http")
 
@@ -155,7 +157,6 @@ async def call_tool_endpoint(
 
 
 if __name__ == "__main__":
-    import uvicorn
     port = int(os.environ.get("PORT", "8000"))
     logger.info("Starting Isolyth HTTP server on port %d", port)
     uvicorn.run(app, host="0.0.0.0", port=port)

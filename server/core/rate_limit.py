@@ -10,6 +10,7 @@ Environment variables:
 """
 
 import asyncio
+import contextlib
 import logging
 import os
 import time
@@ -214,8 +215,6 @@ class RateLimiter:
     async def close(self) -> None:
         """Close Redis connection if initialized."""
         if self._redis_client is not None:
-            try:
+            with contextlib.suppress(Exception):
                 await self._redis_client.aclose()
-            except Exception:
-                pass
             self._redis_client = None

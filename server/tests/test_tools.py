@@ -20,6 +20,7 @@ from pathlib import Path
 import socket
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -163,11 +164,6 @@ class TestDbQueryLive:
         Even if we bypass the regex guard, the READ ONLY transaction wrapper
         must cause the DB to reject any mutation.
         """
-        from server.tools.db_query_tool import db_query_handler
-        # We bypass _validate_select_only by calling the DB handler directly
-        # with a crafted args dict that still starts with SELECT
-        # but contains a subquery that would mutate if executed outside READ ONLY.
-        # The easiest real test is to patch the guard away and try an INSERT.
         import server.tools.db_query_tool as mod
         original_validate = mod._validate_select_only
 
@@ -291,7 +287,6 @@ class TestWebFetchMocked:
     @pytest.mark.asyncio
     async def test_fetch_public_url_mocked(self) -> None:
         from server.tools.web_fetch_tool import web_fetch_handler
-        import httpx
 
         mock_response = httpx.Response(
             status_code=200,
@@ -494,7 +489,7 @@ class TestPathTraversalProtection:
         else:
             # If it somehow succeeded (e.g. /etc/passwd is inside tmp in a
             # very unusual setup), that would be a bug.
-            assert False, "Symlink escape should have been blocked"
+            raise AssertionError("Symlink escape should have been blocked")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

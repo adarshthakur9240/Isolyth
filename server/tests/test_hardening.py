@@ -10,7 +10,9 @@ Tests cover:
 
 import json
 from typing import Any
+from unittest.mock import patch
 
+from fastapi.testclient import TestClient
 import mcp.types as types
 import pytest
 
@@ -30,6 +32,7 @@ from server.core.telemetry import (
     record_tool_metrics,
     track_active_sandbox,
 )
+from server.http_server import app
 
 # Helper to unwrap server call result
 def _parse_res(server_result: Any) -> dict:
@@ -208,9 +211,6 @@ class TestServerHardeningPipeline:
 
 class TestHttpServerDevTokenEndpoint:
     def test_dev_token_endpoint_returns_valid_jwt(self) -> None:
-        from fastapi.testclient import TestClient
-        from server.http_server import app
-
         client = TestClient(app)
         response = client.get("/auth/dev-token")
         assert response.status_code == 200
@@ -223,10 +223,6 @@ class TestHttpServerDevTokenEndpoint:
         assert claims["sub"] == "dev-user"
 
     def test_dev_token_endpoint_disabled_when_dev_mode_false(self) -> None:
-        from unittest.mock import patch
-        from fastapi.testclient import TestClient
-        from server.http_server import app
-
         client = TestClient(app)
         with patch("server.http_server.DEV_MODE", False):
             response = client.get("/auth/dev-token")

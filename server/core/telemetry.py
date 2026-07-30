@@ -13,10 +13,10 @@ Tracing:
   • OpenTelemetry Tracer setup with ConsoleSpanExporter.
 """
 
+from collections.abc import Generator
 import contextlib
 import logging
 import os
-from typing import Generator
 
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider

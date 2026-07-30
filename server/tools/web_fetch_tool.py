@@ -115,7 +115,7 @@ def _resolve_and_check_host(hostname: str) -> None:
     except socket.gaierror as exc:
         raise SSRFBlockedError(f"DNS resolution failed for {hostname!r}: {exc}") from exc
 
-    for family, _type, _proto, _canonname, sockaddr in addr_infos:
+    for _family, _type, _proto, _canonname, sockaddr in addr_infos:
         ip = sockaddr[0]
         if _is_ip_blocked(ip):
             raise SSRFBlockedError(
@@ -167,7 +167,7 @@ async def web_fetch_handler(args: dict[str, Any]) -> list[types.TextContent]:
         _resolve_and_check_host(parsed.hostname)
     except SSRFBlockedError as exc:
         logger.warning("SSRF attempt blocked", extra={"url": url, "reason": str(exc)})
-        return _error(f"Request blocked for security reasons: target is a private/reserved address")
+        return _error("Request blocked for security reasons: target is a private/reserved address")
 
     # ── Fetch ─────────────────────────────────────────────────────────────────
     try:

@@ -24,6 +24,7 @@ Usage::
     #  "duration_s": 0.003, "fuel_consumed": 12345}
 """
 
+import contextlib
 from dataclasses import dataclass, field
 import logging
 import os
@@ -279,10 +280,8 @@ class WasmSandbox:
             return self._execute_with_files(stdin_path, stdout_path, stderr_path)
         finally:
             for p in (stdin_path, stdout_path, stderr_path):
-                try:
+                with contextlib.suppress(OSError):
                     os.unlink(p)
-                except OSError:
-                    pass
 
     def _execute_with_files(
         self,

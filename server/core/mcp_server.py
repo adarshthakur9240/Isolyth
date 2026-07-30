@@ -11,6 +11,7 @@ Responsibilities:
   • Return well-formed MCP error responses on failure
 """
 
+import asyncio
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 import json
@@ -23,23 +24,28 @@ import mcp.types as types
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 
-# ── Real tool imports ─────────────────────────────────────────────────────────
-
-from server.tools.db_query_tool import (
-    db_query_handler,
-    DB_QUERY_TOOL_SCHEMA,
-)
-from server.tools.web_fetch_tool import (
-    web_fetch_handler,
-    WEB_FETCH_TOOL_SCHEMA,
-)
-from server.tools.file_ops_tool import (
-    file_ops_handler,
-    FILE_OPS_TOOL_SCHEMA,
+from server.core.auth import AuthError, authenticate_request
+from server.core.rate_limit import RateLimiter
+from server.core.telemetry import (
+    get_tracer,
+    record_tool_metrics,
+    setup_telemetry,
 )
 from server.tools.code_exec_tool import (
-    code_exec_handler,
     CODE_EXEC_TOOL_SCHEMA,
+    code_exec_handler,
+)
+from server.tools.db_query_tool import (
+    DB_QUERY_TOOL_SCHEMA,
+    db_query_handler,
+)
+from server.tools.file_ops_tool import (
+    FILE_OPS_TOOL_SCHEMA,
+    file_ops_handler,
+)
+from server.tools.web_fetch_tool import (
+    WEB_FETCH_TOOL_SCHEMA,
+    web_fetch_handler,
 )
 
 # ── Structured JSON logging ───────────────────────────────────────────────────
@@ -146,18 +152,7 @@ class ToolRegistry:
 # ── Server factory ────────────────────────────────────────────────────────────
 
 
-# ── Hardening imports ─────────────────────────────────────────────────────────
 
-from server.core.auth import (
-    AuthError,
-    authenticate_request,
-)
-from server.core.rate_limit import RateLimiter
-from server.core.telemetry import (
-    get_tracer,
-    record_tool_metrics,
-    setup_telemetry,
-)
 
 # Initialize OpenTelemetry telemetry tracer
 setup_telemetry()
@@ -487,7 +482,5 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    import asyncio
-
     asyncio.run(main())
 

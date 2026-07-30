@@ -10,12 +10,12 @@ Example:
 from pathlib import Path
 import sys
 
-# Add project root to sys.path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from server.core.auth import create_token
 
 def main() -> None:
+    # Add project root to sys.path
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    from server.core.auth import create_token
+
     user_id = sys.argv[1] if len(sys.argv) > 1 else "dev-user"
     roles = sys.argv[2:] if len(sys.argv) > 2 else ["admin", "developer"]
 

@@ -7,14 +7,15 @@ without opening a real stdio transport, so they run fast and in-process.
 
 import os
 import sys
-from typing import Any
-
-import mcp.types as types
-import pytest
 
 # Make sure the project root is on sys.path when running with pytest from the
 # repo root.  (Alternatively, install the package in editable mode.)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+
+from typing import Any
+
+import mcp.types as types
+import pytest
 
 from server.core.mcp_server import ToolRegistry, _register_builtin_stubs, build_server
 

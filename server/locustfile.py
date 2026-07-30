@@ -19,10 +19,11 @@ Usage:
 from pathlib import Path
 import random
 import sys
-from locust import HttpUser, between, task
 
 # Ensure project root is on sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from locust import HttpUser, between, task
 
 from server.core.auth import create_token
 
