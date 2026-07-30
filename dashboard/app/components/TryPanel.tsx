@@ -79,7 +79,6 @@ export function TryPanel({ onToolExecuted }: { onToolExecuted?: () => void }) {
   const [fetchUrl, setFetchUrl] = useState("https://api.github.com/zen");
   const [filePath, setFilePath] = useState(".");
   const [fileOperation, setFileOperation] = useState<"read_file" | "list_directory">("list_directory");
-  const [fileContent, setFileContent] = useState("");
 
   const [jwtToken, setJwtToken] = useState("");
   const [loadingToken, setLoadingToken] = useState(false);
@@ -386,28 +385,6 @@ export function TryPanel({ onToolExecuted }: { onToolExecuted?: () => void }) {
                     }}
                   />
                 </div>
-
-                {fileOperation === "write" && (
-                  <div>
-                    <label style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 700 }}>File Content</label>
-                    <textarea
-                      rows={3}
-                      value={fileContent}
-                      onChange={(e) => setFileContent(e.target.value)}
-                      placeholder="Text content to write..."
-                      style={{
-                        width: "100%",
-                        padding: "10px 12px",
-                        background: "var(--bg-base)",
-                        color: "#fff",
-                        border: "2px solid #000",
-                        borderRadius: 4,
-                        fontFamily: "monospace",
-                        fontSize: 12,
-                      }}
-                    />
-                  </div>
-                )}
               </div>
             )}
           </div>
