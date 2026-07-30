@@ -9,8 +9,6 @@ Environment variables:
               If unset or unreachable, falls back to in-memory rate limiting.
 """
 
-from __future__ import annotations
-
 import asyncio
 import logging
 import os

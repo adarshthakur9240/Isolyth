@@ -14,15 +14,11 @@ Test strategy:
   • code_exec_tool  – gated on eval.wasm existing; skips gracefully otherwise.
 """
 
-from __future__ import annotations
-
 import json
 import os
-import socket
-import tempfile
 from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+import socket
+from unittest.mock import AsyncMock, patch
 
 import pytest
 

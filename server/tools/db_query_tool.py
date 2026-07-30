@@ -19,8 +19,6 @@ Environment variables:
   DB_QUERY_TIMEOUT_S – per-query timeout in seconds (default 10)
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import os

@@ -11,14 +11,12 @@ Responsibilities:
   • Return well-formed MCP error responses on failure
 """
 
-from __future__ import annotations
-
+from collections.abc import Callable, Coroutine
+from dataclasses import dataclass, field
 import json
 import logging
 import sys
 import time
-from collections.abc import Callable, Coroutine
-from dataclasses import dataclass, field
 from typing import Any
 
 import mcp.types as types
@@ -156,7 +154,6 @@ from server.core.auth import (
 )
 from server.core.rate_limit import RateLimiter
 from server.core.telemetry import (
-    get_prometheus_metrics,
     get_tracer,
     record_tool_metrics,
     setup_telemetry,

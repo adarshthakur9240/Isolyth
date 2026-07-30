@@ -20,19 +20,14 @@ project at server/wasm_modules/factorial_src/:
 The factorial test class is skipped automatically when factorial.wasm is absent.
 """
 
-from __future__ import annotations
-
 import os
-import tempfile
 from pathlib import Path
+import tempfile
 
 import pytest
 
 from server.core.sandbox import (
-    SandboxError,
     SandboxInvalidModule,
-    SandboxOutOfFuel,
-    SandboxTimeout,
     WasmSandbox,
     WasmSandboxConfig,
     run_wasm,

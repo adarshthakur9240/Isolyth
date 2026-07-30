@@ -16,12 +16,9 @@ Usage:
   Terminal 2: locust -f server/locustfile.py --headless -u 100 -r 3.33 --run-time 1m --host http://localhost:8000
 """
 
-from __future__ import annotations
-
-import json
+from pathlib import Path
 import random
 import sys
-from pathlib import Path
 from locust import HttpUser, between, task
 
 # Ensure project root is on sys.path

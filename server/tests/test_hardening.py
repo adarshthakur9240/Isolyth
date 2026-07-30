@@ -8,21 +8,18 @@ Tests cover:
   4. End-to-end MCP server pipeline (auth check -> rate limit -> traced execution -> metrics)
 """
 
-from __future__ import annotations
-
 import json
-import os
-import pytest
+from typing import Any
+
 import mcp.types as types
+import pytest
 
 from server.core.auth import (
-    AuthError,
     ExpiredTokenError,
     InvalidTokenError,
     MissingTokenError,
     authenticate_request,
     create_token,
-    generate_dev_token,
     verify_token,
 )
 from server.core.mcp_server import ToolRegistry, build_server

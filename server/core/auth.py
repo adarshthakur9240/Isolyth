@@ -12,8 +12,6 @@ Environment variables:
                     "true" / "1" (default in production) or "false" / "0".
 """
 
-from __future__ import annotations
-
 import logging
 import os
 import time

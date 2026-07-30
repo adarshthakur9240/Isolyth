@@ -58,8 +58,6 @@ Environment variables:
   CODE_EXEC_TIMEOUT_S  – wall-clock timeout in seconds (default: 3)
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import os

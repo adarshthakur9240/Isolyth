@@ -24,15 +24,13 @@ Usage::
     #  "duration_s": 0.003, "fuel_consumed": 12345}
 """
 
-from __future__ import annotations
-
+from dataclasses import dataclass, field
 import logging
 import os
+from pathlib import Path
 import tempfile
 import threading
 import time
-from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 from wasmtime import (

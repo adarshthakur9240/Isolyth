@@ -15,13 +15,11 @@ Usage:
   uvicorn server.http_server:app --host 0.0.0.0 --port 8000
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import os
-import sys
 from pathlib import Path
+import sys
 from typing import Any
 
 # Ensure project root is on sys.path

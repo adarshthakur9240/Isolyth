@@ -7,13 +7,13 @@ Example:
     python server/bin/generate_token.py dev-user admin developer
 """
 
-import sys
 from pathlib import Path
+import sys
 
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from server.core.auth import create_token, generate_dev_token
+from server.core.auth import create_token
 
 def main() -> None:
     user_id = sys.argv[1] if len(sys.argv) > 1 else "dev-user"

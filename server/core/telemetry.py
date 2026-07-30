@@ -13,30 +13,25 @@ Tracing:
   • OpenTelemetry Tracer setup with ConsoleSpanExporter.
 """
 
-from __future__ import annotations
-
 import contextlib
 import logging
-import time
-from typing import Any, Generator
+import os
+from typing import Generator
 
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter, SimpleSpanProcessor
 from prometheus_client import (
+    REGISTRY,
     Counter,
     Gauge,
     Histogram,
-    CollectorRegistry,
     generate_latest,
-    REGISTRY,
 )
 
 logger = logging.getLogger("isolyth.telemetry")
 
 # ── OpenTelemetry Tracing Setup ───────────────────────────────────────────────
-
-import os
 
 _tracer_provider: TracerProvider | None = None
 _tracer: trace.Tracer | None = None
