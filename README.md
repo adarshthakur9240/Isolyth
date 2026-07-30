@@ -52,17 +52,17 @@ The high-level system architecture illustrates how incoming requests from LLM ag
 
 ```mermaid
 flowchart TD
-    Client["AI Agent / MCP Client"] -->|HTTP POST /tools/call| Router["FastAPI Bridge Router"]
+    Client["AI Agent / MCP Client"] -->|"HTTP POST /tools/call"| Router["FastAPI Bridge Router"]
     
     subgraph SecurityBoundary["Security & Rate Limiting Boundary"]
         Router --> AuthGuard{"JWT Auth Guard\n(HS256 / RS256)"}
-        AuthGuard -->|Valid Token| RateLimiter{"Redis Rate Limiter\n(Sliding Window Token Bucket)"}
-        AuthGuard -->|Missing/Invalid| AuthErr["HTTP 401 / 403 Unauthorized"]
-        RateLimiter -->|Limit Exceeded| RateErr["HTTP 429 Rate Limit Exceeded"]
+        AuthGuard -->|"Valid Token"| RateLimiter{"Redis Rate Limiter\n(Sliding Window Token Bucket)"}
+        AuthGuard -->|"Missing or Invalid"| AuthErr["HTTP 401 / 403 Unauthorized"]
+        RateLimiter -->|"Limit Exceeded"| RateErr["HTTP 429 Rate Limit Exceeded"]
     end
     
     subgraph ExecutionEngine["Core Tool Registry & Execution Engine"]
-        RateLimiter -->|Quota Allowed| Registry["MCP Tool Registry"]
+        RateLimiter -->|"Quota Allowed"| Registry["MCP Tool Registry"]
         Registry --> CodeExec["code_exec (WASM Sandbox)"]
         Registry --> DbQuery["db_query (PostgreSQL)"]
         Registry --> WebFetch["web_fetch (SSRF Protected)"]
@@ -70,7 +70,7 @@ flowchart TD
     end
 
     subgraph SandboxedResources["Isolated External Resources"]
-        CodeExec --> WasmEngine["Wasmtime Engine (Instruction Fuel & Memory Limit)"]
+        CodeExec --> WasmEngine["Wasmtime Engine (Fuel & Memory Limit)"]
         DbQuery --> ReadOnlyDB[("PostgreSQL DB (ReadOnly Transaction)")]
         WebFetch --> PublicNet["Public Web (SSRF Filtered)"]
         FileOps --> WorkspaceDir["Workspace Directory (/workspace)"]
@@ -97,7 +97,7 @@ sequenceDiagram
     Agent->>HTTP: POST /tools/call { name, arguments, _auth_token }
     HTTP->>OTEL: Start span "tool_call:{name}"
     HTTP->>Auth: authenticate_request(arguments)
-    alt Token Invalid / Expired
+    alt Token Invalid or Expired
         Auth-->>HTTP: Raise AuthError
         HTTP-->>Agent: 401 Unauthorized Response
     else Token Valid
@@ -126,17 +126,17 @@ Isolyth executes expressions inside a compiled WebAssembly module (`eval.wasm`) 
 
 ```mermaid
 flowchart LR
-    Input["Input Expression\ne.g., 'sqrt(144) * pi'"] --> Config["WasmSandboxConfig\n• max_fuel: 10,000,000\n• max_memory: 16 MB\n• timeout: 3.0s"]
+    Input["Input Expression\ne.g., sqrt(144) * pi"] --> Config["WasmSandboxConfig\nmax_fuel: 10,000,000\nmax_memory: 16 MB\ntimeout: 3.0s"]
     Config --> Store["Wasmtime Store & Engine"]
     Store --> FuelCheck{"Instruction Fuel & Epoch Check"}
     
     subgraph MemoryJail["Isolated Memory Boundary"]
-        FuelCheck -->|Fuel OK| Execution["eval.wasm Module Execution"]
+        FuelCheck -->|"Fuel OK"| Execution["eval.wasm Module Execution"]
         Execution --> Output["Numeric Result / Output String"]
     end
     
-    FuelCheck -->|Fuel Exhausted| FuelErr["Trap: Out of Fuel Error"]
-    FuelCheck -->|Timeout Reached| TimeErr["Trap: Epoch Timeout Error"]
+    FuelCheck -->|"Fuel Exhausted"| FuelErr["Trap: Out of Fuel Error"]
+    FuelCheck -->|"Timeout Reached"| TimeErr["Trap: Epoch Timeout Error"]
 ```
 
 ---
@@ -148,19 +148,19 @@ Every request is verified against a configured secret key (`JWT_SECRET` / `JWT_S
 ```mermaid
 flowchart TD
     Req["Incoming Tool Request"] --> Extract{"Extract Bearer Token"}
-    Extract -->|From Header| HeaderVal["Authorization: Bearer <token>"]
-    Extract -->|From Args| ArgVal["arguments._auth_token"]
-    Extract -->|None Found| CheckAuth{"Require Auth Enabled?"}
+    Extract -->|"From Header"| HeaderVal["Authorization: Bearer token"]
+    Extract -->|"From Args"| ArgVal["arguments._auth_token"]
+    Extract -->|"None Found"| CheckAuth{"Require Auth Enabled?"}
     
     HeaderVal --> Decode["jwt.decode(token, secret, algorithm='HS256')"]
     ArgVal --> Decode
     
-    CheckAuth -->|Yes| Err401["Reject: MissingTokenError (401)"]
-    CheckAuth -->|No| AnonUser["Assign: Anonymous Claims"]
+    CheckAuth -->|"Yes"| Err401["Reject: MissingTokenError 401"]
+    CheckAuth -->|"No"| AnonUser["Assign: Anonymous Claims"]
     
-    Decode -->|Expired Signature| ErrExp["Reject: ExpiredTokenError (401)"]
-    Decode -->|Invalid Signature| ErrInv["Reject: InvalidTokenError (401)"]
-    Decode -->|Valid Signature| Claims["Return Claims: { sub, iat, exp, roles }"]
+    Decode -->|"Expired Signature"| ErrExp["Reject: ExpiredTokenError 401"]
+    Decode -->|"Invalid Signature"| ErrInv["Reject: InvalidTokenError 401"]
+    Decode -->|"Valid Signature"| Claims["Return Claims: sub, iat, exp, roles"]
 ```
 
 ---
@@ -171,17 +171,17 @@ To prevent denial-of-service and API quota depletion, Isolyth implements atomic 
 
 ```mermaid
 flowchart TD
-    Start["Check Rate Limit for (user_id, tool_name)"] --> CheckRedis{"Is Redis Available?"}
+    Start["Check Rate Limit for user_id and tool_name"] --> CheckRedis{"Is Redis Available?"}
     
-    CheckRedis -->|Yes| RedisLua["Execute Atomic Lua Script\nkey: ratelimit:{user_id}:{tool_name}"]
-    RedisLua --> SlidingWindow["Count Requests in Window (60s)"]
+    CheckRedis -->|"Redis Online"| RedisLua["Execute Atomic Lua Script\nkey: ratelimit:{user_id}:{tool_name}"]
+    RedisLua --> SlidingWindow["Count Requests in Window 60s"]
     SlidingWindow --> LimitCheck{"Count <= Limit?"}
     
-    CheckRedis -->|No (Fallback)| LocalBucket["InMemoryRateLimiter\nToken Bucket per user:tool"]
+    CheckRedis -->|"Redis Offline Fallback"| LocalBucket["InMemoryRateLimiter\nToken Bucket per user:tool"]
     LocalBucket --> LimitCheck
     
-    LimitCheck -->|Yes| Allow["Allowed = True\nProceed to Execution"]
-    LimitCheck -->|No| Block["Allowed = False\nReturn Retry-After Info"]
+    LimitCheck -->|"Quota Available"| Allow["Allowed = True\nProceed to Execution"]
+    LimitCheck -->|"Quota Exceeded"| Block["Allowed = False\nReturn Retry-After Info"]
 ```
 
 ---
@@ -192,14 +192,14 @@ Isolyth is deployed across a modern serverless/container infrastructure topology
 
 ```mermaid
 graph TD
-    UserClient["User Browser / Client App"] -->|HTTPS| Vercel["Vercel Edge Network\nNext.js 16 Dashboard"]
-    AgentClient["LLM Agent / MCP Client"] -->|HTTPS / REST| Railway["Railway Container\nFastAPI MCP Server"]
-    Vercel -->|Polling /metrics & health| Railway
+    UserClient["User Browser / Client App"] -->|"HTTPS"| Vercel["Vercel Edge Network\nNext.js 16 Dashboard"]
+    AgentClient["LLM Agent / MCP Client"] -->|"HTTPS / REST"| Railway["Railway Container\nFastAPI MCP Server"]
+    Vercel -->|"Polling /metrics and /health"| Railway
     
     subgraph RailwayInfra["Railway Managed Infrastructure"]
-        Railway -->|asyncpg DSN| Postgres[("PostgreSQL 16 Database")]
-        Railway -->|redis-py| Redis[("Redis 7 Cache & Rate Limiter")]
-        Railway -->|Embedded| WasmRuntime["Wasmtime WASM Engine"]
+        Railway -->|"asyncpg DSN"| Postgres[("PostgreSQL 16 Database")]
+        Railway -->|"redis-py"| Redis[("Redis 7 Cache & Rate Limiter")]
+        Railway -->|"Embedded"| WasmRuntime["Wasmtime WASM Engine"]
     end
 ```
 
@@ -212,10 +212,10 @@ The class diagram outlines the object-oriented structure of the tool registry, i
 ```mermaid
 classDiagram
     class ToolRegistry {
-        -dict~str, ToolEntry~ _tools
+        +dict tools
         +register(name, description, input_schema, handler)
         +get(name) ToolEntry
-        +list_tools() list~types.Tool~
+        +list_tools() list
     }
     
     class ToolEntry {
@@ -233,7 +233,7 @@ classDiagram
     class RateLimiter {
         +Redis redis_client
         +dict tool_limits
-        +is_allowed(user_id, tool_name) tuple~bool, dict~
+        +is_allowed(user_id, tool_name) tuple
     }
     
     ToolRegistry "1" *-- "many" ToolEntry : manages
@@ -257,13 +257,13 @@ flowchart LR
         Workflow --> ContainerBuild["Docker Multi-Stage Build"]
     end
     
-    Lint -->|Pass| Deploy
-    Pytest -->|Pass| Deploy
-    ContainerBuild -->|Pass| Deploy{"All Checks Passed?"}
+    Lint -->|"Passed"| Deploy
+    Pytest -->|"Passed"| Deploy
+    ContainerBuild -->|"Passed"| Deploy{"All Checks Passed?"}
     
     subgraph DeployPhase["Automatic Deployment"]
-        Deploy -->|Deploy Backend| RailwayDeploy["Railway Automatic Build"]
-        Deploy -->|Deploy Dashboard| VercelDeploy["Vercel Automatic Build"]
+        Deploy -->|"Deploy Backend"| RailwayDeploy["Railway Automatic Build"]
+        Deploy -->|"Deploy Dashboard"| VercelDeploy["Vercel Automatic Build"]
     end
 ```
 
@@ -291,8 +291,8 @@ Observability is built into every layer. OpenTelemetry traces each tool executio
 flowchart LR
     ToolCall["Tool Request Execution"] --> OTEL["OpenTelemetry Tracer"]
     
-    OTEL -->|Spans & Attributes| Spans["OTEL Tracing Spans\n(tool_name, duration_ms, status)"]
-    OTEL -->|Prometheus Metrics| Metrics["Prometheus Histograms & Gauges\n• isolyth_tool_calls_total\n• isolyth_tool_duration_seconds\n• isolyth_active_sandboxes"]
+    OTEL -->|"Spans and Attributes"| Spans["OTEL Tracing Spans\n(tool_name, duration_ms, status)"]
+    OTEL -->|"Prometheus Metrics"| Metrics["Prometheus Histograms and Gauges\n• isolyth_tool_calls_total\n• isolyth_tool_duration_seconds\n• isolyth_active_sandboxes"]
     
     Metrics --> PromEndpoint["GET /metrics Endpoint"]
     PromEndpoint --> Dashboard["Next.js Real-Time Dashboard"]
